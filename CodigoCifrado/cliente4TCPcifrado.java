@@ -23,28 +23,23 @@ public class cliente4TCPcifrado {
             PrintWriter salida = new PrintWriter(socket.getOutputStream(), true);
             Scanner scanner = new Scanner(System.in);
 
-            // ============================
-            // FASE 1: Intercambio RSA
-            // ============================
-
-            // 1️⃣ Recibir clave pública del servidor
+            // 1. Recibir clave pública del servidor
             String clavePublicaServidorBase64 = entrada.readLine();
             byte[] bytesClavePublicaServidor = Base64.getDecoder().decode(clavePublicaServidorBase64);
             KeyFactory keyFactory = KeyFactory.getInstance("RSA");
             X509EncodedKeySpec spec = new X509EncodedKeySpec(bytesClavePublicaServidor);
             clavePublicaServidor = keyFactory.generatePublic(spec);
 
-            // 2️⃣ Generar par de claves RSA del cliente
+            // 2. Enviar clave pública del cliente
             KeyPairGenerator generador = KeyPairGenerator.getInstance("RSA");
             generador.initialize(2048);
             KeyPair parClavesCliente = generador.generateKeyPair();
             clavePrivadaCliente = parClavesCliente.getPrivate();
 
-            // 3️⃣ Enviar clave pública del cliente al servidor
             String clavePublicaClienteBase64 = Base64.getEncoder().encodeToString(parClavesCliente.getPublic().getEncoded());
             salida.println(clavePublicaClienteBase64);
 
-            // 4️⃣ Recibir clave AES cifrada y descifrarla con la clave privada RSA del cliente
+            // 3. Recibir clave AES cifrada y descifrarla con mi RSA privada
             String claveAEScifradaBase64 = entrada.readLine();
             byte[] bytesClaveAEScifrada = Base64.getDecoder().decode(claveAEScifradaBase64);
 
@@ -53,12 +48,8 @@ public class cliente4TCPcifrado {
             byte[] bytesClaveAES = rsaCipher.doFinal(bytesClaveAEScifrada);
             claveAES = new SecretKeySpec(bytesClaveAES, "AES");
 
-            System.out.println("✅ Intercambio de claves completado (RSA + AES).");
+            System.out.println(" Intercambio de claves completado (RSA + AES).");
             System.out.println("Comunicación segura iniciada.\n");
-
-            // ============================
-            // FASE 2: Comunicación cifrada AES
-            // ============================
 
             // Hilo para recibir mensajes
             new Thread(() -> {
@@ -70,20 +61,29 @@ public class cliente4TCPcifrado {
                         System.out.print("> ");
                     }
                 } catch (Exception e) {
-                    System.out.println("❌ Conexión cerrada por el servidor.");
+                    System.out.println(" Conexión cerrada por el servidor.");
+                    System.exit(0);
                 }
             }).start();
 
-            // Enviar mensajes
+            // Hilo principal para enviar mensajes
             System.out.print("> ");
             while (true) {
                 String mensaje = scanner.nextLine();
-                salida.println(mensaje);
 
+                // Si el mensaje es salir, lo enviamos cifrado y rompemos el bucle local
                 if (mensaje.equalsIgnoreCase("!salir")) {
+                    salida.println(safeEncrypt("!salir", claveAES));
                     System.out.println("Desconectado del servidor.");
                     break;
                 }
+
+                // CORRECCIÓN: Cifrar el mensaje antes de enviarlo
+                String mensajeEncriptado = safeEncrypt(mensaje, claveAES);
+                if (mensajeEncriptado != null) {
+                    salida.println(mensajeEncriptado);
+                }
+
                 System.out.print("> ");
             }
 
@@ -95,24 +95,26 @@ public class cliente4TCPcifrado {
         }
     }
 
-    // ============================
-    // MÉTODOS DE CIFRADO / DESCIFRADO
-    // ============================
-
-    private static String decryptAESMessage(String mensajeCifrado, SecretKey clave) throws Exception {
-        Cipher cipher = Cipher.getInstance("AES");
-        cipher.init(Cipher.DECRYPT_MODE, clave);
-        byte[] bytesDescifrados = cipher.doFinal(Base64.getDecoder().decode(mensajeCifrado));
-        return new String(bytesDescifrados);
+    private static String safeEncrypt(String mensaje, SecretKey clave) {
+        try {
+            Cipher aes = Cipher.getInstance("AES");
+            aes.init(Cipher.ENCRYPT_MODE, clave);
+            return Base64.getEncoder().encodeToString(aes.doFinal(mensaje.getBytes()));
+        } catch (Exception e) {
+            System.out.println("Error al cifrar mensaje: " + e.getMessage());
+            return null;
+        }
     }
 
-    private static String safeDecrypt(String texto, SecretKey clave) {
-        if (clave == null) return texto;
+    private static String safeDecrypt(String mensajeCifrado, SecretKey clave) {
+        if (clave == null) return mensajeCifrado;
         try {
-            return decryptAESMessage(texto, clave);
+            Cipher cipher = Cipher.getInstance("AES");
+            cipher.init(Cipher.DECRYPT_MODE, clave);
+            byte[] bytesDescifrados = cipher.doFinal(Base64.getDecoder().decode(mensajeCifrado));
+            return new String(bytesDescifrados);
         } catch (Exception e) {
-            // Si el mensaje no está cifrado o el descifrado falla, lo muestra igual
-            return texto;
+            return "(Error de descifrado o mensaje del sistema)";
         }
     }
 }
