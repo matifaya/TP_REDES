@@ -7,19 +7,18 @@ import java.util.Base64;
 
 public class MensajeEncriptado {
 
-    // Genera par RSA
     public static KeyPair generarParRSA() throws Exception {
         KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
         gen.initialize(2048);
         return gen.generateKeyPair();
     }
 
-    // Codifica clave pública a Base64
+
     public static String codificarClavePublica(PublicKey clavePublica) {
         return Base64.getEncoder().encodeToString(clavePublica.getEncoded());
     }
 
-    // Descifra clave AES con RSA
+
     public static SecretKey descifrarClaveAESRSA(String claveCifrada, PrivateKey privada) throws Exception {
         Cipher rsa = Cipher.getInstance("RSA");
         rsa.init(Cipher.DECRYPT_MODE, privada);
@@ -28,7 +27,7 @@ public class MensajeEncriptado {
         return new SecretKeySpec(claveBytes, 0, claveBytes.length, "AES");
     }
 
-    // Encriptación segura
+
     public static String safeEncrypt(String mensaje, SecretKey clave) {
         try {
             Cipher aes = Cipher.getInstance("AES");
@@ -39,7 +38,7 @@ public class MensajeEncriptado {
         }
     }
 
-    // Desencriptación segura
+
     public static String safeDecrypt(String mensajeCifrado, SecretKey clave) {
         try {
             Cipher aes = Cipher.getInstance("AES");
